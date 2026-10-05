@@ -10,7 +10,9 @@ for name in ['SenseVoicePrototypeApp.swift','AppModel.swift','ContentView.swift'
     ref = obj(name, 'PBXFileReference', lastKnownFileType='sourcecode.swift', path=name, sourceTree='<group>')
     build = obj(name+'build','PBXBuildFile', fileRef=ref); files.append((ref, build))
 info = obj('info','PBXFileReference',lastKnownFileType='text.plist.xml',path='Info.plist',sourceTree='<group>')
-appgroup = obj('appgroup','PBXGroup',children=[r for r,b in files]+[info],path='SenseVoiceApp',sourceTree='<group>')
+assets = obj('assets', 'PBXFileReference', lastKnownFileType='folder.assetcatalog', path='Assets.xcassets', sourceTree='<group>')
+assetbuild = obj('assetsBuild', 'PBXBuildFile', fileRef=assets)
+appgroup = obj('appgroup','PBXGroup',children=[r for r,b in files]+[info,assets],path='SenseVoiceApp',sourceTree='<group>')
 product = obj('product','PBXFileReference',explicitFileType='wrapper.application',includeInIndex='0',path='SenseVoicePrototype.app',sourceTree='BUILT_PRODUCTS_DIR')
 products = obj('products','PBXGroup',children=[product],name='Products',sourceTree='<group>')
 main = obj('main','PBXGroup',children=[appgroup,products],sourceTree='<group>')
@@ -22,10 +24,10 @@ googleBuilds = [obj(str(product)+'Build','PBXBuildFile',productRef=product) for 
 libbuild = obj('libbuild','PBXBuildFile',productRef=lib)
 sources = obj('sources','PBXSourcesBuildPhase',buildActionMask='2147483647',files=[b for r,b in files],runOnlyForDeploymentPostprocessing='0')
 frameworks = obj('frameworks','PBXFrameworksBuildPhase',buildActionMask='2147483647',files=[libbuild]+googleBuilds,runOnlyForDeploymentPostprocessing='0')
-resources = obj('resources','PBXResourcesBuildPhase',buildActionMask='2147483647',files=[],runOnlyForDeploymentPostprocessing='0')
+resources = obj('resources','PBXResourcesBuildPhase',buildActionMask='2147483647',files=[assetbuild],runOnlyForDeploymentPostprocessing='0')
 configs=[]; projectconfigs=[]
 for name in ['Debug','Release']:
-    settings = dict(PRODUCT_BUNDLE_IDENTIFIER='com.local.sensevoiceprototype',PRODUCT_NAME='$(TARGET_NAME)',INFOPLIST_FILE='SenseVoiceApp/Info.plist',GENERATE_INFOPLIST_FILE='NO',CODE_SIGN_STYLE='Automatic',IPHONEOS_DEPLOYMENT_TARGET='17.0',TARGETED_DEVICE_FAMILY='1,2',SWIFT_VERSION='5.0',SWIFT_STRICT_CONCURRENCY='targeted',SUPPORTED_PLATFORMS='iphoneos iphonesimulator',SDKROOT='iphoneos',ENABLE_PREVIEWS='YES',ONLY_ACTIVE_ARCH='YES' if name=='Debug' else 'NO',SWIFT_OPTIMIZATION_LEVEL='-Onone' if name=='Debug' else '-O')
+    settings = dict(ASSETCATALOG_COMPILER_APPICON_NAME='AppIcon',PRODUCT_BUNDLE_IDENTIFIER='com.local.sensevoiceprototype',PRODUCT_NAME='$(TARGET_NAME)',INFOPLIST_FILE='SenseVoiceApp/Info.plist',GENERATE_INFOPLIST_FILE='NO',CODE_SIGN_STYLE='Automatic',IPHONEOS_DEPLOYMENT_TARGET='17.0',TARGETED_DEVICE_FAMILY='1,2',SWIFT_VERSION='5.0',SWIFT_STRICT_CONCURRENCY='targeted',SUPPORTED_PLATFORMS='iphoneos iphonesimulator',SDKROOT='iphoneos',ENABLE_PREVIEWS='YES',ONLY_ACTIVE_ARCH='YES' if name=='Debug' else 'NO',SWIFT_OPTIMIZATION_LEVEL='-Onone' if name=='Debug' else '-O')
     configs.append(obj('target'+name,'XCBuildConfiguration',name=name,buildSettings=settings))
     projectconfigs.append(obj('project'+name,'XCBuildConfiguration',name=name,buildSettings=dict(CLANG_ENABLE_MODULES='YES',CLANG_ENABLE_OBJC_ARC='YES',SDKROOT='iphoneos',IPHONEOS_DEPLOYMENT_TARGET='17.0',SWIFT_VERSION='5.0',DEBUG_INFORMATION_FORMAT='dwarf' if name=='Debug' else 'dwarf-with-dsym')))
 targetconfig = obj('targetconfig','XCConfigurationList',buildConfigurations=configs,defaultConfigurationIsVisible='0',defaultConfigurationName='Release')

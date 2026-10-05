@@ -6,6 +6,16 @@
 	};
 	"objectVersion" = "56";
 	"objects" = {
+		"3685E330EC5277A9DD5661C6" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"path" = "Assets.xcassets";
+			"sourceTree" = "<group>";
+		};
+		"AA400DFD4219F700A8EA7668" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3685E330EC5277A9DD5661C6";
+		};
 		"455CF40FAFC3EB473C031FB6" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -84,7 +94,7 @@
 		};
 		"3A2A88DEEFF3D1D23E496597" = {
 			"isa" = "PBXGroup";
-			"children" = ("455CF40FAFC3EB473C031FB6", "4AE4A885EF26CC9F4DA548B8", "9727B9EED8ACD2EE46E136A0", "5AAE219D4AE888592C740D2C", "08F24EA3442FDDC94CA6FEB0", "75BC22ED5A21F531E6053E65", "C5F313959B8AB09DB7D4A473", "59BD0A3FF43B32849B319E64",);
+			"children" = ("455CF40FAFC3EB473C031FB6", "4AE4A885EF26CC9F4DA548B8", "9727B9EED8ACD2EE46E136A0", "5AAE219D4AE888592C740D2C", "08F24EA3442FDDC94CA6FEB0", "75BC22ED5A21F531E6053E65", "C5F313959B8AB09DB7D4A473", "59BD0A3FF43B32849B319E64", "3685E330EC5277A9DD5661C6",);
 			"path" = "SenseVoiceApp";
 			"sourceTree" = "<group>";
 		};
@@ -160,13 +170,14 @@
 		"0189424A5A60FED329FA868E" = {
 			"isa" = "PBXResourcesBuildPhase";
 			"buildActionMask" = "2147483647";
-			"files" = ();
+			"files" = ("AA400DFD4219F700A8EA7668",);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
 		"7082CC0B6FC1282FCEABD07A" = {
 			"isa" = "XCBuildConfiguration";
 			"name" = "Debug";
 			"buildSettings" = {
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.local.sensevoiceprototype";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"INFOPLIST_FILE" = "SenseVoiceApp/Info.plist";
@@ -199,6 +210,7 @@
 			"isa" = "XCBuildConfiguration";
 			"name" = "Release";
 			"buildSettings" = {
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.local.sensevoiceprototype";
 				"PRODUCT_NAME" = "$(TARGET_NAME)";
 				"INFOPLIST_FILE" = "SenseVoiceApp/Info.plist";

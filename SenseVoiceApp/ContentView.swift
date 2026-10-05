@@ -17,7 +17,7 @@ struct ContentView: View {
             NavigationStack(path: $path) {
                 libraryView.navigationDestination(for: UUID.self) { RecordingDetail(id: $0) }
             }
-                .tabItem { Label("资料库", systemImage: "text.badge.waveform") }.tag(1)
+                .tabItem { Label("资料库", systemImage: "folder.fill") }.tag(1)
         }
         .onChange(of: model.lastSavedID) { _, id in
             if let id { selecting = false; selectedIDs.removeAll(); tab = 1; path = [id] }

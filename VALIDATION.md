@@ -93,3 +93,12 @@ Xcode 26.6（17F113），iOS 26.5 SDK 和 Simulator runtime 安装完成。
 - iCloud 首次选择文件夹、保存书签后复用，通过系统 security-scoped URL 和 NSFileCoordinator 写入；使用 isUbiquitousItem 校验目标确实属于 iCloud。模拟器误选本机 Transcripts 时正确拒绝，未把本机保存宣称为云盘上传。
 - iPhone 17 Pro 模拟器 Debug、iPhone 设备 Release（未签名）均构建成功，15 项 XCTest 全通过，git diff --check 通过。
 - 仍需真机验证：iCloud Drive 目录授权、重启后书签复用、联网/离线同步。模拟器没有登录 iCloud，不宣称实际云端上传已实测。后台/锁屏录音仍需真机验证。
+
+## App 图标与资料库图标
+
+- 补充 Assets.xcassets / AppIcon，并在 Debug、Release 设置 ASSETCATALOG_COMPILER_APPICON_NAME；同步更新工程生成脚本，保留原共享 scheme。
+- AppIcon 原图为 1024×1024 PNG，无 alpha。iPhone/iPad 构建产物包含 Assets.car 与 CFBundleIcons，主图标名称均为 AppIcon。
+- 系统符号查询确认原 text.badge.waveform 不存在；改为有效的 folder.fill。模拟器截图确认录音页底部资料库文件夹图标可见。
+- 独立模拟器覆盖安装，桌面实际显示橙色麦克风/笔记 App 图标。
+- iPhone 17 Pro 模拟器 Debug、iPhone 设备 Release（未签名）构建成功；plist 与 git diff --check 通过。本次仅资源与图标配置变更，未重复运行核心测试。
+- 图标设计与完整生成提示词记录在 ICON_DESIGN.md。
