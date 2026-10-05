@@ -1,0 +1,26 @@
+# Build products and downloaded dependencies
+.build/
+.swiftpm/
+DerivedData/
+Artifacts/
+Reference/
+
+# Local exports and recordings
+SenseVoicePrototype-source.zip
+*.wav
+*.m4a
+*.onnx
+*.ipa
+*.dSYM/
+
+# Xcode and macOS user state
+.DS_Store
+*.xcuserstate
+xcuserdata/
+
+# Local credentials and signing files
+.env
+.env.*
+!.env.example
+*.p12
+*.mobileprovision
