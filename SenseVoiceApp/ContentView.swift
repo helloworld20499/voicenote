@@ -28,9 +28,9 @@ struct ContentView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                 }.padding(.top, 12)
                 VStack(alignment: .leading, spacing: 14) {
-                    Label(model.modelReady ? "离线模型已就绪" : "先准备你的离线模型", systemImage: model.modelReady ? "checkmark.shield.fill" : "arrow.down.circle.fill")
+                    Label(model.modelReady ? "离线模型已就绪" : "录音不需要先下载模型", systemImage: model.modelReady ? "checkmark.shield.fill" : "arrow.down.circle.fill")
                         .font(.headline).foregroundStyle(model.modelReady ? .green : .primary)
-                    Text(model.modelReady ? "关闭网络后也可以录音和转文字。" : "首次下载约 239 MB；下载完成后，音频无需上传。")
+                    Text(model.modelReady ? "关闭网络后也可以录音和转文字。" : "可以先录音保存；需要转文字时再下载约 239 MB 的模型。")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if model.downloading {
                         ProgressView(value: model.downloadProgress)
@@ -47,14 +47,14 @@ struct ContentView: View {
                         .symbolEffect(.variableColor, isActive: model.isRecording)
                     Text(model.isRecording ? timerText : "准备好，就开始说吧")
                         .font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
-                    Text(model.isRecording ? "正在录音，最长 2 分钟" : "录完后自动转录，中文里可以夹杂英文。")
+                    Text(model.isRecording ? "正在录音，点击停止后保存" : "先录音保存，需要时再转成文字。")
                         .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button { model.isRecording ? model.stopRecording() : model.startRecording() } label: {
-                        Label(model.isRecording ? "停止并转录" : "开始录音", systemImage: model.isRecording ? "stop.fill" : "mic.fill")
+                        Label(model.isRecording ? "停止并保存" : "开始录音", systemImage: model.isRecording ? "stop.fill" : "mic.fill")
                             .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!model.modelReady || model.downloading || model.transcribingID != nil || model.requestingPermission)
+                    .disabled(model.downloading || model.transcribingID != nil || model.requestingPermission)
                     if model.transcribingID != nil {
                         ProgressView(value: model.transcriptionProgress)
                         Text("正在本机识别，首次加载模型可能稍慢…").font(.caption).foregroundStyle(.secondary)
@@ -72,7 +72,7 @@ struct ContentView: View {
                             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
                     }
                 }
-                Text("原型版：请保持 App 在前台。离开 App 或来电时会停止录音。分段边界及英文术语的效果待真机验证。")
+                Text("开始录音后可切换 App 或锁屏，返回后点击停止保存。来电等系统中断会停止录音。转录请在前台进行，后台录音效果待真机验证。")
                     .font(.footnote).foregroundStyle(.secondary)
             }.padding(20)
         }.navigationTitle("声笺").navigationBarTitleDisplayMode(.inline)
@@ -198,6 +198,10 @@ struct RecordingDetail: View {
                                 Label("导出文字到文件 / 云盘", systemImage: "folder")
                             }.buttonStyle(.borderedProminent).disabled(model.busy)
                             ShareLink(item: record.text) { Label("分享文字", systemImage: "square.and.arrow.up") }
+                        }
+                        if !model.modelReady {
+                            Text("录音已保存。请先在录音页下载离线模型，再回来转录。")
+                                .font(.footnote).foregroundStyle(.secondary)
                         }
                         Button(record.processingDuration == nil ? "转录这段录音" : "重新转录（覆盖当前文字）") { model.transcribeRecording(id) }
                             .buttonStyle(.bordered).disabled(model.busy || !model.modelReady)

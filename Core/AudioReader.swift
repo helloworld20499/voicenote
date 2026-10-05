@@ -1,30 +1,55 @@
 import AVFoundation
 
 public enum AudioReader {
-    public static let maximumDuration: Double = 120
+    // Compatibility helper for short CLI checks; the transcription engine streams chunks.
     public static func samples(from url: URL) throws -> [Float] {
+        var result: [Float] = []
+        try forEachChunk(from: url) { chunk, _ in result.append(contentsOf: chunk) }
+        return result
+    }
+    @discardableResult
+    public static func forEachChunk(from url: URL, consume: ([Float], Double) throws -> Void) throws -> Double {
         let file = try AVAudioFile(forReading: url)
         guard file.length > 0 else { throw PrototypeError.message("录音为空，请重新录制。") }
         let duration = Double(file.length) / file.processingFormat.sampleRate
-        guard duration <= maximumDuration + 1 else { throw PrototypeError.message("原型支持最长 2 分钟的录音。") }
-        guard let input = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+        guard let input = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 4096),
               let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: file.processingFormat, to: format),
-              let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(ceil(duration * 16_000)) + 1024) else {
+              let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16_000) else {
             throw PrototypeError.message("无法转换录音格式。")
         }
-        try file.read(into: input)
-        var supplied = false
-        var error: NSError?
-        let status = converter.convert(to: output, error: &error) { _, state in
-            if supplied { state.pointee = .endOfStream; return nil }
-            supplied = true; state.pointee = .haveData; return input
+        var pending: [Float] = []; var processed = 0; var readError: Error?
+        func deliver(_ count: Int) throws {
+            let chunk = Array(pending.prefix(count))
+            processed += count
+            try consume(chunk, min(1, Double(processed) / 16_000 / duration))
+            pending.removeFirst(count)
         }
-        if let error { throw error }
-        guard status != .error, let data = output.floatChannelData, output.frameLength > 0 else {
-            throw PrototypeError.message("录音格式转换失败。")
+        while true {
+            var error: NSError?
+            output.frameLength = 0
+            let status = converter.convert(to: output, error: &error) { _, state in
+                guard file.framePosition < file.length else { state.pointee = .endOfStream; return nil }
+                do {
+                    try file.read(into: input, frameCount: AVAudioFrameCount(min(4096, file.length - file.framePosition)))
+                    state.pointee = .haveData; return input
+                } catch { readError = error; state.pointee = .endOfStream; return nil }
+            }
+            if let readError { throw readError }
+            if let error { throw error }
+            guard status != .error else { throw PrototypeError.message("录音格式转换失败。") }
+            if let data = output.floatChannelData, output.frameLength > 0 {
+                pending.append(contentsOf: UnsafeBufferPointer(start: data[0], count: Int(output.frameLength)))
+            }
+            while pending.count > 20 * 16_000 {
+                let range = AudioChunks.ranges(for: pending)[0]
+                try deliver(range.count)
+            }
+            if status == .endOfStream { break }
         }
-        return Array(UnsafeBufferPointer(start: data[0], count: Int(output.frameLength)))
+        if !pending.isEmpty { try deliver(pending.count) }
+        guard processed > 0 else { throw PrototypeError.message("录音格式转换失败。") }
+        return Double(processed) / 16_000
     }
 }
 

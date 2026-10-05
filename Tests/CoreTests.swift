@@ -25,5 +25,34 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(result.count, 16_000, accuracy: 2)
         XCTAssertGreaterThan(result.map { abs($0) }.max()!, 0.05)
     }
+    func testLongRecordingStreamsBoundedChunksWithoutLosingSamples() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).caf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000)!
+        buffer.frameLength = 48_000
+        for channel in 0..<2 {
+            for i in 0..<48_000 { buffer.floatChannelData![channel][i] = Float(sin(Double(i) * 2 * .pi * 440 / 48_000)) * 0.1 }
+        }
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: format.settings)
+            for _ in 0..<131 { try file.write(from: buffer) }
+        }
+        var total = 0; var chunks = 0; var previousProgress = 0.0; var peak: Float = 0
+        let duration = try AudioReader.forEachChunk(from: url) { samples, progress in
+            XCTAssertFalse(samples.isEmpty)
+            XCTAssertLessThanOrEqual(samples.count, 20 * 16_000)
+            XCTAssertGreaterThanOrEqual(progress, previousProgress)
+            XCTAssertLessThanOrEqual(progress, 1)
+            previousProgress = progress
+            total += samples.count; chunks += 1
+            peak = max(peak, samples.map { abs($0) }.max() ?? 0)
+        }
+        XCTAssertEqual(total, 131 * 16_000, accuracy: 2)
+        XCTAssertEqual(duration, 131, accuracy: 0.001)
+        XCTAssertGreaterThan(chunks, 6)
+        XCTAssertGreaterThan(peak, 0.05)
+        XCTAssertEqual(previousProgress, 1, accuracy: 0.0001)
+    }
     func testMissingModelIsNotReady() { XCTAssertFalse(ModelStore.isReady(at: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))) }
 }

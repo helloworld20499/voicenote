@@ -17,15 +17,12 @@ public actor SenseVoiceEngine {
         guard ModelStore.isReady(at: modelDirectory) else { throw PrototypeError.message("请先下载 SenseVoice 模型。") }
         if recognizer == nil { try load(at: modelDirectory) }
         guard let recognizer else { throw PrototypeError.message("识别引擎未就绪。") }
-        let samples = try AudioReader.samples(from: url)
-        let ranges = AudioChunks.ranges(for: samples)
         var texts: [String] = []
-        for (index, range) in ranges.enumerated() {
+        let duration = try AudioReader.forEachChunk(from: url) { segment, fraction in
             guard let stream = SherpaOnnxCreateOfflineStream(recognizer) else {
                 throw PrototypeError.message("无法创建识别任务。")
             }
             defer { SherpaOnnxDestroyOfflineStream(stream) }
-            let segment = Array(samples[range])
             segment.withUnsafeBufferPointer { buffer in
                 SherpaOnnxAcceptWaveformOffline(stream, 16_000, buffer.baseAddress, Int32(buffer.count))
             }
@@ -34,9 +31,9 @@ public actor SenseVoiceEngine {
             let text = result.pointee.text.map { String(cString: $0) } ?? ""
             SherpaOnnxDestroyOfflineRecognizerResult(result)
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { texts.append(text) }
-            progress(Double(index + 1) / Double(ranges.count))
+            progress(fraction)
         }
-        return Transcription(text: texts.joined(separator: "\n"), audioDuration: Double(samples.count) / 16_000,
+        return Transcription(text: texts.joined(separator: "\n"), audioDuration: duration,
                              processingDuration: Date().timeIntervalSince(started))
     }
     private func load(at root: URL) throws {

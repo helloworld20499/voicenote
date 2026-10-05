@@ -59,7 +59,7 @@ import SenseVoiceCore
         }
     }
     func startRecording() {
-        guard !busy, modelReady else { return }
+        guard !busy else { return }
         stopPlayback(); requestingPermission = true
         Task {
             defer { requestingPermission = false }
@@ -71,7 +71,7 @@ import SenseVoiceCore
             guard UIApplication.shared.applicationState == .active else { notice = "回到 App 后点击开始录音。"; return }
             do {
                 let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+                try session.setCategory(.record, mode: .default)
                 try session.setActive(true)
                 let id = UUID(); let url = Self.root.appendingPathComponent("\(id).wav")
                 let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 16_000,
@@ -79,16 +79,15 @@ import SenseVoiceCore
                     AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false]
                 let recording = try AVAudioRecorder(url: url, settings: settings)
                 recording.delegate = self; recording.isMeteringEnabled = true
-                guard recording.record(forDuration: AudioReader.maximumDuration) else { throw PrototypeError.message("无法启动麦克风录音。") }
-                try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
+                guard recording.record() else { throw PrototypeError.message("无法启动麦克风录音。") }
+                try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: url.path)
                 recorder = recording; pendingID = id; pendingURL = url
                 elapsed = 0; isRecording = true; notice = nil
-                UIApplication.shared.isIdleTimerDisabled = true
+                UIApplication.shared.isIdleTimerDisabled = false
                 timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
                     Task { @MainActor in
                         guard let self, self.isRecording else { return }
                         self.elapsed = self.recorder?.currentTime ?? self.elapsed
-                        if self.elapsed >= AudioReader.maximumDuration - 0.2 { self.stopRecording(transcribe: true) }
                     }
                 }
             } catch {
@@ -97,7 +96,7 @@ import SenseVoiceCore
             }
         }
     }
-    func stopRecording(transcribe: Bool = true) {
+    func stopRecording(transcribe: Bool = false) {
         guard isRecording, let id = pendingID, let url = pendingURL else { return }
         let duration = max(recorder?.currentTime ?? 0, elapsed)
         isRecording = false; timer?.invalidate(); timer = nil
@@ -105,8 +104,9 @@ import SenseVoiceCore
         UIApplication.shared.isIdleTimerDisabled = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         guard duration > 0.2 else { try? FileManager.default.removeItem(at: url); notice = "录音太短，请再说几句。"; return }
-        recordings.insert(Recording(id: id, createdAt: Date(), filename: url.lastPathComponent, duration: duration, text: ""), at: 0)
+        recordings.insert(Recording(id: id, createdAt: Date().addingTimeInterval(-duration), filename: url.lastPathComponent, duration: duration, text: ""), at: 0)
         persist()
+        notice = "录音已保存，可在「我的录音」中随时转录。"
         if transcribe { transcribeRecording(id) }
     }
     func transcribeRecording(_ id: UUID) {
@@ -158,17 +158,19 @@ import SenseVoiceCore
         } catch { self.error = "删除失败：\(error.localizedDescription)" }
     }
     func wentToBackground() {
-        if isRecording { stopRecording(transcribe: false); notice = "离开 App 后录音已停止并保存，回到前台可转录。" }
+        // An active recording owns the background audio session; do not deactivate it.
+        if isRecording { return }
         stopPlayback()
     }
     private func persist() {
-        do { try JSONEncoder().encode(recordings).write(to: indexURL, options: [.atomic, .completeFileProtection]) }
+        do { try JSONEncoder().encode(recordings).write(to: indexURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
         catch { self.error = "保存失败：\(error.localizedDescription)" }
     }
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         Task { @MainActor in
+            guard self.recorder === recorder else { return }
             if !flag { self.error = "录音被打断，已保留可用音频。" }
-            self.stopRecording(transcribe: flag)
+            self.stopRecording(transcribe: false)
         }
     }
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
