@@ -46,6 +46,36 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "5AAE219D4AE888592C740D2C";
 		};
+		"08F24EA3442FDDC94CA6FEB0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "StorageView.swift";
+			"sourceTree" = "<group>";
+		};
+		"D1948985EC3818C164989691" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "08F24EA3442FDDC94CA6FEB0";
+		};
+		"75BC22ED5A21F531E6053E65" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "ExportLocations.swift";
+			"sourceTree" = "<group>";
+		};
+		"6207BF7D0F9C8070D618997E" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "75BC22ED5A21F531E6053E65";
+		};
+		"C5F313959B8AB09DB7D4A473" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "GoogleDriveService.swift";
+			"sourceTree" = "<group>";
+		};
+		"B03573A6DF3BED634574B4D5" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "C5F313959B8AB09DB7D4A473";
+		};
 		"59BD0A3FF43B32849B319E64" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "text.plist.xml";
@@ -54,7 +84,7 @@
 		};
 		"3A2A88DEEFF3D1D23E496597" = {
 			"isa" = "PBXGroup";
-			"children" = ("455CF40FAFC3EB473C031FB6", "4AE4A885EF26CC9F4DA548B8", "9727B9EED8ACD2EE46E136A0", "5AAE219D4AE888592C740D2C", "59BD0A3FF43B32849B319E64",);
+			"children" = ("455CF40FAFC3EB473C031FB6", "4AE4A885EF26CC9F4DA548B8", "9727B9EED8ACD2EE46E136A0", "5AAE219D4AE888592C740D2C", "08F24EA3442FDDC94CA6FEB0", "75BC22ED5A21F531E6053E65", "C5F313959B8AB09DB7D4A473", "59BD0A3FF43B32849B319E64",);
 			"path" = "SenseVoiceApp";
 			"sourceTree" = "<group>";
 		};
@@ -85,6 +115,32 @@
 			"package" = "582681C2EAE02B3F3D399C0C";
 			"productName" = "SenseVoiceCore";
 		};
+		"E447B9BF3E9A874B45912EE1" = {
+			"isa" = "XCRemoteSwiftPackageReference";
+			"repositoryURL" = "https://github.com/google/GoogleSignIn-iOS.git";
+			"requirement" = {
+				"kind" = "exactVersion";
+				"version" = "9.2.0";
+			};
+		};
+		"5B7E61942C37114B72D33037" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "E447B9BF3E9A874B45912EE1";
+			"productName" = "GoogleSignIn";
+		};
+		"2541EA2FA8F8A10584693498" = {
+			"isa" = "XCSwiftPackageProductDependency";
+			"package" = "E447B9BF3E9A874B45912EE1";
+			"productName" = "GoogleSignInSwift";
+		};
+		"ED92794C2295EBD5F5F9759E" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "5B7E61942C37114B72D33037";
+		};
+		"9E1AAFA393980A37B07F0011" = {
+			"isa" = "PBXBuildFile";
+			"productRef" = "2541EA2FA8F8A10584693498";
+		};
 		"E03EB618E90D617AB8F6A5B0" = {
 			"isa" = "PBXBuildFile";
 			"productRef" = "9D062BAFFF17BA8B9A1215C4";
@@ -92,13 +148,13 @@
 		"BCE16DD0260827ECF338C787" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
-			"files" = ("85B8DC064D9AC5FDC126B5F5", "55BD910C65E714050FD605B4", "B4A081ADAD6BFF6324356F4F", "266F65FD652F6C0AEFBD6EF5",);
+			"files" = ("85B8DC064D9AC5FDC126B5F5", "55BD910C65E714050FD605B4", "B4A081ADAD6BFF6324356F4F", "266F65FD652F6C0AEFBD6EF5", "D1948985EC3818C164989691", "6207BF7D0F9C8070D618997E", "B03573A6DF3BED634574B4D5",);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
 		"7561BFB015D8F536760CB671" = {
 			"isa" = "PBXFrameworksBuildPhase";
 			"buildActionMask" = "2147483647";
-			"files" = ("E03EB618E90D617AB8F6A5B0",);
+			"files" = ("E03EB618E90D617AB8F6A5B0", "ED92794C2295EBD5F5F9759E", "9E1AAFA393980A37B07F0011",);
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
 		"0189424A5A60FED329FA868E" = {
@@ -190,7 +246,7 @@
 			"buildRules" = ();
 			"dependencies" = ();
 			"name" = "SenseVoicePrototype";
-			"packageProductDependencies" = ("9D062BAFFF17BA8B9A1215C4",);
+			"packageProductDependencies" = ("9D062BAFFF17BA8B9A1215C4", "5B7E61942C37114B72D33037", "2541EA2FA8F8A10584693498",);
 			"productName" = "SenseVoicePrototype";
 			"productReference" = "38A007151ABE87CC01A5B6E9";
 			"productType" = "com.apple.product-type.application";
@@ -210,7 +266,7 @@
 			"productRefGroup" = "FBDC4F23F93125BBEEAE800C";
 			"projectDirPath" = "";
 			"projectRoot" = "";
-			"packageReferences" = ("582681C2EAE02B3F3D399C0C",);
+			"packageReferences" = ("582681C2EAE02B3F3D399C0C", "E447B9BF3E9A874B45912EE1",);
 			"targets" = ("0E8A3AD980EC179856012B7E",);
 		};
 	};

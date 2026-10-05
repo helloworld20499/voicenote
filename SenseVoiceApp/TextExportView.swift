@@ -24,6 +24,10 @@ struct ExportTextDocument: FileDocument {
 
 struct TextExportView: View {
     let records: [Recording]
+    @EnvironmentObject private var locations: ExportLocations
+    @EnvironmentObject private var drive: GoogleDriveService
+    @State private var folderPicker = false
+    @State private var uploadedURL: URL?
     @Environment(\.dismiss) private var dismiss
     @State private var document: ExportTextDocument?
     @State private var filename = "声笺.md"
@@ -36,6 +40,12 @@ struct TextExportView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let message {
+                    Section("保存结果") {
+                        Label(message, systemImage: "checkmark.circle").foregroundStyle(.green)
+                        if let uploadedURL { Link("查看 Google Drive 文件", destination: uploadedURL) }
+                    }
+                }
                 Section("导出内容") {
                     Label("\(available.count) 条文字记录", systemImage: "doc.text")
                     if available.count < records.count {
@@ -50,24 +60,34 @@ struct TextExportView: View {
                     Text("按日期分组，方便 AI 阅读和整理。文件只包含文字，不包含录音。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section {
-                    Button(action: prepare) {
-                        HStack {
-                            Label("选择保存位置", systemImage: "folder")
-                            Spacer()
-                            if preparing { ProgressView() }
-                        }
-                    }.disabled(available.isEmpty || preparing)
-                    Text("保存到「我的 iPhone」即可下载到本机。已在「文件」App 启用的 iCloud Drive、Google Drive、OneDrive 等，也可作为保存位置。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Text("如果云盘没有出现在位置列表，请先安装并登录对应 App，在「文件」App 的浏览页面启用它。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                if let message { Section { Label(message, systemImage: "checkmark.circle").foregroundStyle(.green) } }
+                Section("保存目标") {
+                    Button("保存到本机", systemImage: "iphone") { prepare(.local) }
+                    if let folder = locations.folderName {
+                        Button("保存到常用文件夹：\(folder)", systemImage: "folder.fill") { prepare(.preferred) }
+                    }
+                    Button("上传到 Google Drive", systemImage: "cloud") { prepare(.google) }
+                        .disabled(!drive.configured || drive.busy)
+                    if !drive.configured {
+                        Text("Google Drive 等待配置 OAuth Client ID。可先保存到本机。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        Text("上传到 Google Drive / 声笺；首次上传会请你登录并授权，之后直接上传。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Button("另选保存位置…", systemImage: "folder") { prepare(.system) }
+                    Button(locations.folderName == nil ? "设置常用文件夹…" : "更换常用文件夹…") { folderPicker = true }
+                    if preparing { ProgressView("正在保存…") }
+                }.disabled(available.isEmpty || preparing)
             }
             .navigationTitle("导出文字")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.disabled(preparing) } }
+            .sheet(isPresented: $folderPicker) {
+                FolderPicker(onSelect: { url in
+                    do { try locations.remember(url) } catch { self.error = error.localizedDescription }
+                    folderPicker = false
+                }, onCancel: { folderPicker = false })
+            }
             .fileExporter(isPresented: $showExporter, document: document, contentType: contentType,
                           defaultFilename: filename) { result in
                 switch result {
@@ -83,8 +103,9 @@ struct TextExportView: View {
             } message: { Text(error ?? "") }
         }
     }
-    private func prepare() {
-        preparing = true; message = nil
+    private enum Target { case local, preferred, google, system }
+    private func prepare(_ target: Target) {
+        preparing = true; message = nil; uploadedURL = nil
         let snapshot = records; let zone = TimeZone.current
         Task {
             defer { preparing = false }
@@ -94,9 +115,22 @@ struct TextExportView: View {
                     let name = try RecordingTextExport.filename(snapshot, timeZone: zone)
                     return (text, name)
                 }.value
-                document = ExportTextDocument(text: prepared.0); filename = prepared.1
-                showExporter = true
-            } catch { self.error = error.localizedDescription }
+                switch target {
+                case .local:
+                    let url = try locations.saveLocally(text: prepared.0, filename: prepared.1)
+                    message = "已保存：\(url.lastPathComponent)。在「文件与云盘」中查看、分享或删除。"
+                case .preferred:
+                    let url = try locations.saveToPreferred(text: prepared.0, filename: prepared.1)
+                    message = "已保存到常用文件夹：\(url.lastPathComponent)。云盘同步由对应 App 完成。"
+                case .google:
+                    let result = try await drive.upload(text: prepared.0, filename: prepared.1)
+                    uploadedURL = result.viewURL
+                    message = "已上传到 Google Drive / 声笺：\(result.name ?? prepared.1)"
+                case .system:
+                    document = ExportTextDocument(text: prepared.0); filename = prepared.1
+                    showExporter = true
+                }
+            } catch { if !GoogleDriveService.isCancellation(error) { self.error = error.localizedDescription } }
         }
     }
 }

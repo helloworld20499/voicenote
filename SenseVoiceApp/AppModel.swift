@@ -3,6 +3,8 @@ import AVFoundation
 import SenseVoiceCore
 
 @MainActor final class AppModel: NSObject, ObservableObject, AVAudioRecorderDelegate, AVAudioPlayerDelegate {
+    @Published var lastSavedID: UUID?
+    private var libraryReady = false
     @Published var recordings: [Recording] = []
     @Published var modelReady = ModelStore.isReady()
     @Published var downloading = false
@@ -33,9 +35,9 @@ import SenseVoiceCore
             try FileManager.default.createDirectory(at: Self.root, withIntermediateDirectories: true)
             var root = Self.root; var values = URLResourceValues(); values.isExcludedFromBackup = true
             try root.setResourceValues(values)
-            if FileManager.default.fileExists(atPath: indexURL.path) {
-                recordings = try JSONDecoder().decode([Recording].self, from: Data(contentsOf: indexURL))
-            }
+            let loaded = try RecordingStore(directory: Self.root).load()
+            recordings = loaded.records; libraryReady = true
+            if loaded.recoveredCount > 0 { notice = "已找回 \(loaded.recoveredCount) 条本机录音，可稍后转录。" }
         } catch { self.error = "无法读取录音列表：\(error.localizedDescription)" }
         interruptionObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] notification in
             let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
@@ -60,6 +62,7 @@ import SenseVoiceCore
     }
     func startRecording() {
         guard !busy else { return }
+        guard libraryReady else { error = "录音列表无法读取，请先检查本机 Recordings/recordings.json，避免覆盖原有文字。"; return }
         stopPlayback(); requestingPermission = true
         Task {
             defer { requestingPermission = false }
@@ -73,7 +76,9 @@ import SenseVoiceCore
                 let session = AVAudioSession.sharedInstance()
                 try session.setCategory(.record, mode: .default)
                 try session.setActive(true)
-                let id = UUID(); let url = Self.root.appendingPathComponent("\(id).wav")
+                let id = UUID()
+                let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+                let url = Self.root.appendingPathComponent("录音_\(formatter.string(from: Date()))_\(id.uuidString.prefix(8)).wav")
                 let settings: [String: Any] = [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 16_000,
                     AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16,
                     AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false]
@@ -105,8 +110,9 @@ import SenseVoiceCore
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         guard duration > 0.2 else { try? FileManager.default.removeItem(at: url); notice = "录音太短，请再说几句。"; return }
         recordings.insert(Recording(id: id, createdAt: Date().addingTimeInterval(-duration), filename: url.lastPathComponent, duration: duration, text: ""), at: 0)
-        persist()
-        notice = "录音已保存，可在「我的录音」中随时转录。"
+        guard persist() else { return }
+        lastSavedID = id
+        notice = "录音已保存到「资料库」，可随时播放或转录。"
         if transcribe { transcribeRecording(id) }
     }
     func transcribeRecording(_ id: UUID) {
@@ -119,10 +125,11 @@ import SenseVoiceCore
                     Task { @MainActor in self?.transcriptionProgress = value }
                 }
                 if let index = recordings.firstIndex(where: { $0.id == id }) {
+                    let previous = recordings
                     recordings[index].text = result.text
                     recordings[index].duration = result.audioDuration
                     recordings[index].processingDuration = result.processingDuration
-                    persist()
+                    guard persist() else { recordings = previous; return }
                     notice = result.text.isEmpty ? "没有识别到文字，录音已保留。" : "转录完成，录音和文字已保存在本机。"
                 }
             } catch { self.error = "转录失败，录音已保留：\(error.localizedDescription)" }
@@ -130,7 +137,9 @@ import SenseVoiceCore
     }
     func updateText(_ id: UUID, text: String) {
         guard let index = recordings.firstIndex(where: { $0.id == id }) else { return }
-        recordings[index].text = text; persist()
+        let previous = recordings
+        recordings[index].text = text
+        if !persist() { recordings = previous }
     }
     func togglePlayback(_ record: Recording) {
         if playingID == record.id { stopPlayback(); return }
@@ -153,7 +162,8 @@ import SenseVoiceCore
         guard !busy else { return }
         if playingID == record.id { stopPlayback() }
         do {
-            try FileManager.default.removeItem(at: Self.root.appendingPathComponent(record.filename))
+            let audio = Self.root.appendingPathComponent(record.filename)
+            if FileManager.default.fileExists(atPath: audio.path) { try FileManager.default.removeItem(at: audio) }
             recordings.removeAll { $0.id == record.id }; persist()
         } catch { self.error = "删除失败：\(error.localizedDescription)" }
     }
@@ -162,9 +172,33 @@ import SenseVoiceCore
         if isRecording { return }
         stopPlayback()
     }
-    private func persist() {
-        do { try JSONEncoder().encode(recordings).write(to: indexURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
-        catch { self.error = "保存失败：\(error.localizedDescription)" }
+    @discardableResult private func persist() -> Bool {
+        do {
+            guard libraryReady else { throw PrototypeError.message("原有录音列表无法读取，已停止写入以保护内容。") }
+            try RecordingStore(directory: Self.root).save(recordings)
+            return true
+        } catch { self.error = "保存失败：\(error.localizedDescription)"; return false }
+    }
+    func deleteTranscript(_ id: UUID) {
+        guard !busy, libraryReady else { return }
+        do {
+            recordings = try RecordingStore(directory: Self.root).removingTranscript(id, from: recordings)
+            notice = "转录文字已删除，录音保留，可以重新转录。"
+        } catch { self.error = "删除文字失败：\(error.localizedDescription)" }
+    }
+    func reloadRecordings() {
+        guard !busy else { return }
+        do {
+            let result = try RecordingStore(directory: Self.root).load()
+            recordings = result.records; libraryReady = true
+        } catch { self.error = "无法读取录音列表：\(error.localizedDescription)" }
+    }
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        Task { @MainActor in
+            guard self.recorder === recorder else { return }
+            self.stopRecording(transcribe: false)
+            self.error = "录音写入被中断，请检查已保存的音频和可用空间。"
+        }
     }
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         Task { @MainActor in

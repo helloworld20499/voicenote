@@ -4,15 +4,26 @@ import SenseVoiceCore
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var tab = 0
+    @State private var path: [UUID] = []
+    @State private var transcriptsOnly = false
+    @State private var deleteRecord: Recording?
     @State private var selecting = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var exportSelection: ExportSelection?
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             NavigationStack { recorderView }
-                .tabItem { Label("录音", systemImage: "mic.fill") }
-            NavigationStack { libraryView }
-                .tabItem { Label("我的录音", systemImage: "text.badge.waveform") }
+                .tabItem { Label("录音", systemImage: "mic.fill") }.tag(0)
+            NavigationStack(path: $path) {
+                libraryView.navigationDestination(for: UUID.self) { RecordingDetail(id: $0) }
+            }
+                .tabItem { Label("资料库", systemImage: "text.badge.waveform") }.tag(1)
+            NavigationStack { StorageView() }
+                .tabItem { Label("文件与云盘", systemImage: "folder") }.tag(2)
+        }
+        .onChange(of: model.lastSavedID) { _, id in
+            if let id { selecting = false; selectedIDs.removeAll(); tab = 1; path = [id] }
         }
         .alert("提示", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("知道了") { model.error = nil }
@@ -80,11 +91,19 @@ struct ContentView: View {
     private var timerText: String { String(format: "%02d:%02d", Int(model.elapsed) / 60, Int(model.elapsed) % 60) }
     private var libraryView: some View {
         List {
-            if model.recordings.isEmpty {
-                ContentUnavailableView("还没有录音", systemImage: "waveform", description: Text("录制第一段声音，音频与文字会保存在这里。"))
+            Section {
+                Picker("显示记录", selection: $transcriptsOnly) {
+                    Text("全部录音").tag(false)
+                    Text("转录稿").tag(true)
+                }.pickerStyle(.segmented).disabled(selecting)
+                Text("录音自动保存在本机，转录文字可单独删除。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if visibleRecords.isEmpty {
+                ContentUnavailableView(transcriptsOnly ? "还没有转录稿" : "还没有录音", systemImage: transcriptsOnly ? "doc.text" : "waveform", description: Text(transcriptsOnly ? "选择一条已保存的录音进行转录，文字就会显示在这里。" : "录制第一段声音，音频与文字会保存在这里。"))
                     .listRowBackground(Color.clear)
             }
-            ForEach(model.recordings) { record in
+            ForEach(visibleRecords) { record in
                 if selecting {
                     Button {
                         if !selectedIDs.insert(record.id).inserted { selectedIDs.remove(record.id) }
@@ -97,17 +116,23 @@ struct ContentView: View {
                     }.buttonStyle(.plain)
                         .accessibilityLabel("\(record.title)，\(selectedIDs.contains(record.id) ? "已选择" : "未选择")")
                 } else {
-                    NavigationLink { RecordingDetail(id: record.id) } label: { recordRow(record) }
-                        .swipeActions { Button("删除", role: .destructive) { model.delete(record) }.disabled(model.busy) }
+                    NavigationLink(value: record.id) { recordRow(record) }
+                         .swipeActions {
+                            if transcriptsOnly {
+                                Button("删除文字", role: .destructive) { deleteRecord = record }.disabled(model.busy)
+                            } else {
+                                Button("删除记录", role: .destructive) { deleteRecord = record }.disabled(model.busy)
+                            }
+                        }
                 }
             }
         }
-        .navigationTitle("我的录音")
+        .navigationTitle("资料库")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 if selecting {
-                    Button(selectedIDs.count == model.recordings.count ? "取消全选" : "全选") {
-                        selectedIDs = selectedIDs.count == model.recordings.count ? [] : Set(model.recordings.map(\.id))
+                    Button(selectedIDs.count == visibleRecords.count ? "取消全选" : "全选") {
+                        selectedIDs = selectedIDs.count == visibleRecords.count ? [] : Set(visibleRecords.map(\.id))
                     }
                 }
             }
@@ -140,7 +165,20 @@ struct ContentView: View {
                 }.padding().background(.bar)
             }
         }
+        .refreshable { model.reloadRecordings() }
+        .confirmationDialog(transcriptsOnly ? "删除这条转录文字？录音会保留。" : "删除录音和转录文字？", isPresented: Binding(get: { deleteRecord != nil }, set: { if !$0 { deleteRecord = nil } }), titleVisibility: .visible) {
+            Button(transcriptsOnly ? "删除文字，保留录音" : "删除整条记录", role: .destructive) {
+                if let record = deleteRecord {
+                    if transcriptsOnly { model.deleteTranscript(record.id) } else { model.delete(record) }
+                }
+                deleteRecord = nil
+            }
+            Button("取消", role: .cancel) { deleteRecord = nil }
+        }
         .sheet(item: $exportSelection) { selection in TextExportView(records: selection.records) }
+    }
+    private var visibleRecords: [Recording] {
+        transcriptsOnly ? Array(RecordingTextExport.exportable(model.recordings).reversed()) : model.recordings
     }
     private func recordRow(_ record: Recording) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -154,6 +192,9 @@ struct ContentView: View {
 struct RecordingDetail: View {
     @EnvironmentObject private var model: AppModel
     let id: UUID
+    @Environment(\.dismiss) private var dismiss
+    @State private var deletingText = false
+    @State private var deletingRecord = false
     @State private var draft = ""
     @State private var editing = false
     @State private var exportSelection: ExportSelection?
@@ -198,6 +239,8 @@ struct RecordingDetail: View {
                                 Label("导出文字到文件 / 云盘", systemImage: "folder")
                             }.buttonStyle(.borderedProminent).disabled(model.busy)
                             ShareLink(item: record.text) { Label("分享文字", systemImage: "square.and.arrow.up") }
+                            Button("删除转录文字", role: .destructive) { deletingText = true }
+                                .disabled(model.busy)
                         }
                         if !model.modelReady {
                             Text("录音已保存。请先在录音页下载离线模型，再回来转录。")
@@ -206,11 +249,24 @@ struct RecordingDetail: View {
                         Button(record.processingDuration == nil ? "转录这段录音" : "重新转录（覆盖当前文字）") { model.transcribeRecording(id) }
                             .buttonStyle(.bordered).disabled(model.busy || !model.modelReady)
                     }
-                    Text("音频和文字保存在本机。文字文件可手动保存到本机或云盘，导出文字不会包含音频。")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("录音位置：文件 App → 我的 iPhone → 声笺 → Recordings")
+                        Text(record.filename).textSelection(.enabled)
+                    }.font(.caption).foregroundStyle(.secondary)
+                    Button("删除这条录音及文字", role: .destructive) { deletingRecord = true }.disabled(model.busy)
+                    Text("音频保存在本机。导出仅包含 Markdown 文字；已导出的副本可在「文件与云盘」中管理。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }.padding(20)
             }
         }.navigationTitle("录音详情").navigationBarTitleDisplayMode(.inline)
+            .confirmationDialog("删除转录文字？", isPresented: $deletingText, titleVisibility: .visible) {
+                Button("删除文字，保留录音", role: .destructive) { model.deleteTranscript(id) }
+            } message: { Text("可再次转录。已导出的本机或云盘副本不会被删除。") }
+            .confirmationDialog("删除这条录音及文字？", isPresented: $deletingRecord, titleVisibility: .visible) {
+                Button("删除整条记录", role: .destructive) {
+                    if let record { model.delete(record); if !model.recordings.contains(where: { $0.id == id }) { dismiss() } }
+                }
+            }
             .sheet(item: $exportSelection) { selection in TextExportView(records: selection.records) }
     }
 }

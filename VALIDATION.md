@@ -69,3 +69,18 @@ Xcode 26.6（17F113），iOS 26.5 SDK 和 Simulator runtime 安装完成。
 取消录音器与音频读取器的 120 秒限制；无需模型即可录音，停止后只保存，详情中手动转录。转录改为流式读取和重采样，再按约 15–20 秒识别，内存中的波形不随整个录音长度增长。
 
 131 秒 48 kHz 双声道合成音频自动测试通过：总采样数、时长、单块上限、进度与可用振幅保持；共 8 项 XCTest 通过。已设置后台音频模式、录音音频会话和适配锁屏的文件保护，取消切换 App 时主动停止录音。后台、锁屏与真实来电的持续录音行为仍需实体 iPhone 验证，不能从构建成功推断已实测。
+
+## 资料库与 Google Drive 分支
+
+分支：`feature/record-library-google-drive`。
+
+- 共 15 项 XCTest 全部通过：新增有效 WAV 找回、旧文字保留、删除文字后录音可播放与持久化、损坏索引不覆盖、Markdown 重名不覆盖与删除边界检查。
+- Drive API 使用 URLProtocol 模拟响应，验证首次建目录、复用已建目录、UTF-8 Markdown multipart 上传（不含录音）、拒绝权限时停止上传。没有使用真实账号或伪造真实上传成功。
+- GoogleSignIn-iOS 固定 9.2.0，已完成官方登录、恢复登录、增量授权、令牌刷新、账号退出和回调 URL 处理代码；Xcode workspace 保留完整依赖锁定文件。
+- OAuth 配置脚本在隔离 plist 上验证 Client ID、反向 URL Scheme、重复配置不重复 URL Type，并确认后台 audio 权限保持。系统 `/usr/bin/python3` 验证通过；本机 Homebrew Python 的 plistlib/expat 有环境错误，未修改系统环境。
+- 独立模拟器使用合成文字，实测「资料库 → 详情 → 保存到本机」，随后在「文件与云盘」打开 `.md` 内容；检查文字删除确认明确保留录音（未实际删除用户记录）。
+- 模拟器实测选择 `Transcripts` 为常用文件夹，再从导出页直接保存到该文件夹；重名生成 `_2.md` 和 `_3.md`，回读确认中文、英文、emoji、日期与记录数完整，未覆盖原稿。
+- 后台/锁屏录音继续使用 `UIBackgroundModes=audio`、`AVAudioSession.Category.record`、首次解锁后可访问文件保护；录音中进入后台不会停止或关闭音频会话。
+- 仍需：真实 iOS OAuth Client ID、Google 测试账号登录与真实 Drive 上传；实体 iPhone 的后台/锁屏、来电中断与长录音验证。录音、转录和本机导出无需 Google 配置。
+
+该分支最终 iPhone 17 Pro 模拟器 Debug 和 iPhone 设备目标 Release（未签名）构建通过；实体设备安装与录音行为尚未实测。

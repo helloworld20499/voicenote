@@ -6,7 +6,7 @@ objects = {}
 def obj(object_name, isa, **kwargs):
     key = ident(object_name); objects[key] = dict(isa=isa, **kwargs); return key
 files = []
-for name in ['SenseVoicePrototypeApp.swift','AppModel.swift','ContentView.swift','TextExportView.swift']:
+for name in ['SenseVoicePrototypeApp.swift','AppModel.swift','ContentView.swift','TextExportView.swift','StorageView.swift','ExportLocations.swift','GoogleDriveService.swift']:
     ref = obj(name, 'PBXFileReference', lastKnownFileType='sourcecode.swift', path=name, sourceTree='<group>')
     build = obj(name+'build','PBXBuildFile', fileRef=ref); files.append((ref, build))
 info = obj('info','PBXFileReference',lastKnownFileType='text.plist.xml',path='Info.plist',sourceTree='<group>')
@@ -16,9 +16,12 @@ products = obj('products','PBXGroup',children=[product],name='Products',sourceTr
 main = obj('main','PBXGroup',children=[appgroup,products],sourceTree='<group>')
 package = obj('package','XCLocalSwiftPackageReference',relativePath='.')
 lib = obj('lib','XCSwiftPackageProductDependency',package=package,productName='SenseVoiceCore')
+google = obj('googlePackage','XCRemoteSwiftPackageReference',repositoryURL='https://github.com/google/GoogleSignIn-iOS.git',requirement=dict(kind='exactVersion',version='9.2.0'))
+googleProducts = [obj(name+'Product','XCSwiftPackageProductDependency',package=google,productName=name) for name in ['GoogleSignIn','GoogleSignInSwift']]
+googleBuilds = [obj(str(product)+'Build','PBXBuildFile',productRef=product) for product in googleProducts]
 libbuild = obj('libbuild','PBXBuildFile',productRef=lib)
 sources = obj('sources','PBXSourcesBuildPhase',buildActionMask='2147483647',files=[b for r,b in files],runOnlyForDeploymentPostprocessing='0')
-frameworks = obj('frameworks','PBXFrameworksBuildPhase',buildActionMask='2147483647',files=[libbuild],runOnlyForDeploymentPostprocessing='0')
+frameworks = obj('frameworks','PBXFrameworksBuildPhase',buildActionMask='2147483647',files=[libbuild]+googleBuilds,runOnlyForDeploymentPostprocessing='0')
 resources = obj('resources','PBXResourcesBuildPhase',buildActionMask='2147483647',files=[],runOnlyForDeploymentPostprocessing='0')
 configs=[]; projectconfigs=[]
 for name in ['Debug','Release']:
@@ -27,8 +30,8 @@ for name in ['Debug','Release']:
     projectconfigs.append(obj('project'+name,'XCBuildConfiguration',name=name,buildSettings=dict(CLANG_ENABLE_MODULES='YES',CLANG_ENABLE_OBJC_ARC='YES',SDKROOT='iphoneos',IPHONEOS_DEPLOYMENT_TARGET='17.0',SWIFT_VERSION='5.0',DEBUG_INFORMATION_FORMAT='dwarf' if name=='Debug' else 'dwarf-with-dsym')))
 targetconfig = obj('targetconfig','XCConfigurationList',buildConfigurations=configs,defaultConfigurationIsVisible='0',defaultConfigurationName='Release')
 projectconfig = obj('projectconfig','XCConfigurationList',buildConfigurations=projectconfigs,defaultConfigurationIsVisible='0',defaultConfigurationName='Release')
-target = obj('target','PBXNativeTarget',buildConfigurationList=targetconfig,buildPhases=[sources,frameworks,resources],buildRules=[],dependencies=[],name='SenseVoicePrototype',packageProductDependencies=[lib],productName='SenseVoicePrototype',productReference=product,productType='com.apple.product-type.application')
-project = obj('project','PBXProject',attributes=dict(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck='2600'),buildConfigurationList=projectconfig,compatibilityVersion='Xcode 14.0',developmentRegion='zh-Hans',hasScannedForEncodings='0',knownRegions=['zh-Hans','en','Base'],mainGroup=main,productRefGroup=products,projectDirPath='',projectRoot='',packageReferences=[package],targets=[target])
+target = obj('target','PBXNativeTarget',buildConfigurationList=targetconfig,buildPhases=[sources,frameworks,resources],buildRules=[],dependencies=[],name='SenseVoicePrototype',packageProductDependencies=[lib]+googleProducts,productName='SenseVoicePrototype',productReference=product,productType='com.apple.product-type.application')
+project = obj('project','PBXProject',attributes=dict(BuildIndependentTargetsInParallel='YES',LastUpgradeCheck='2600'),buildConfigurationList=projectconfig,compatibilityVersion='Xcode 14.0',developmentRegion='zh-Hans',hasScannedForEncodings='0',knownRegions=['zh-Hans','en','Base'],mainGroup=main,productRefGroup=products,projectDirPath='',projectRoot='',packageReferences=[package,google],targets=[target])
 def render(value, indent=0):
     if isinstance(value, dict):
         return '{\n' + '\n'.join('\t'*(indent+1)+json.dumps(k)+' = '+render(v,indent+1)+';' for k,v in value.items()) + '\n'+'\t'*indent+'}'
