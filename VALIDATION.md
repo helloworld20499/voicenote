@@ -84,3 +84,12 @@ Xcode 26.6（17F113），iOS 26.5 SDK 和 Simulator runtime 安装完成。
 - 仍需：真实 iOS OAuth Client ID、Google 测试账号登录与真实 Drive 上传；实体 iPhone 的后台/锁屏、来电中断与长录音验证。录音、转录和本机导出无需 Google 配置。
 
 该分支最终 iPhone 17 Pro 模拟器 Debug 和 iPhone 设备目标 Release（未签名）构建通过；实体设备安装与录音行为尚未实测。
+
+## 精简界面与 iCloud 导出（feature/next-iteration）
+
+- 仅保留录音、资料库两个页签。模拟器实测录音页只有开始录音按钮，资料库直接显示全部录音；详情移除分享文字，未下载模型时在详情提供下载入口。
+- 导出目标仅本机与 iCloud，移除 Google Drive、常用文件夹及其他保存入口；停止启动时恢复 Google 登录。
+- 独立模拟器合成文字单条导出到本机成功，系统文件夹选择器显示新 Markdown，重名保存生成 `_4.md` 未覆盖已有文件。
+- iCloud 首次选择文件夹、保存书签后复用，通过系统 security-scoped URL 和 NSFileCoordinator 写入；使用 isUbiquitousItem 校验目标确实属于 iCloud。模拟器误选本机 Transcripts 时正确拒绝，未把本机保存宣称为云盘上传。
+- iPhone 17 Pro 模拟器 Debug、iPhone 设备 Release（未签名）均构建成功，15 项 XCTest 全通过，git diff --check 通过。
+- 仍需真机验证：iCloud Drive 目录授权、重启后书签复用、联网/离线同步。模拟器没有登录 iCloud，不宣称实际云端上传已实测。后台/锁屏录音仍需真机验证。

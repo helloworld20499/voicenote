@@ -3,6 +3,8 @@ import UniformTypeIdentifiers
 import SenseVoiceCore
 
 @MainActor final class ExportLocations: ObservableObject {
+    @Published private(set) var iCloudFolderName: String?
+    private let iCloudBookmarkKey = "iCloudMarkdownFolder"
     @Published var folderName: String?
     @Published var files: [URL] = []
     private let defaults: UserDefaults
@@ -16,6 +18,10 @@ import SenseVoiceCore
         if let data = defaults.data(forKey: bookmarkKey) {
             var stale = false
             folderName = (try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale))?.lastPathComponent
+        }
+        if let data = defaults.data(forKey: iCloudBookmarkKey) {
+            var stale = false
+            iCloudFolderName = (try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale))?.lastPathComponent
         }
         refresh()
     }
@@ -37,11 +43,38 @@ import SenseVoiceCore
     func forget() { defaults.removeObject(forKey: bookmarkKey); folderName = nil }
     func saveToPreferred(text: String, filename: String) throws -> URL {
         guard let data = defaults.data(forKey: bookmarkKey) else { throw PrototypeError.message("请先选择常用保存文件夹。") }
+        return try save(text: text, filename: filename, bookmark: data, key: bookmarkKey, requireICloud: false)
+    }
+    func rememberICloudFolder(_ url: URL) throws {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        try validateICloudFolder(url)
+        let data = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+        defaults.set(data, forKey: iCloudBookmarkKey)
+        iCloudFolderName = url.lastPathComponent
+    }
+    func forgetICloudFolder() {
+        defaults.removeObject(forKey: iCloudBookmarkKey); iCloudFolderName = nil
+    }
+    func saveToICloud(text: String, filename: String) throws -> URL {
+        guard let data = defaults.data(forKey: iCloudBookmarkKey) else {
+            throw PrototypeError.message("请先在 iCloud Drive 中选择一个文件夹。")
+        }
+        return try save(text: text, filename: filename, bookmark: data, key: iCloudBookmarkKey, requireICloud: true)
+    }
+    private func validateICloudFolder(_ url: URL) throws {
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isUbiquitousItemKey])
+        guard values.isDirectory == true, values.isUbiquitousItem == true else {
+            throw PrototypeError.message("请选择 iCloud Drive 中的文件夹。若没有 iCloud Drive，请先在系统设置中登录 Apple Account 并开启 iCloud Drive。")
+        }
+    }
+    private func save(text: String, filename: String, bookmark data: Data, key: String, requireICloud: Bool) throws -> URL {
         var stale = false
         let folder = try URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
         let access = folder.startAccessingSecurityScopedResource()
         defer { if access { folder.stopAccessingSecurityScopedResource() } }
-        if stale { defaults.set(try folder.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil), forKey: bookmarkKey) }
+        if requireICloud { try validateICloudFolder(folder) }
+        if stale { defaults.set(try folder.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil), forKey: key) }
         let url = MarkdownArchive.availableURL(filename: filename, in: folder)
         // Cloud file providers coordinate access and own the subsequent remote sync.
         var coordinationError: NSError?; var writeError: Error?

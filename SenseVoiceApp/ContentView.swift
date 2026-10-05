@@ -6,7 +6,6 @@ struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @State private var tab = 0
     @State private var path: [UUID] = []
-    @State private var transcriptsOnly = false
     @State private var deleteRecord: Recording?
     @State private var selecting = false
     @State private var selectedIDs: Set<UUID> = []
@@ -19,8 +18,6 @@ struct ContentView: View {
                 libraryView.navigationDestination(for: UUID.self) { RecordingDetail(id: $0) }
             }
                 .tabItem { Label("资料库", systemImage: "text.badge.waveform") }.tag(1)
-            NavigationStack { StorageView() }
-                .tabItem { Label("文件与云盘", systemImage: "folder") }.tag(2)
         }
         .onChange(of: model.lastSavedID) { _, id in
             if let id { selecting = false; selectedIDs.removeAll(); tab = 1; path = [id] }
@@ -30,77 +27,28 @@ struct ContentView: View {
         } message: { Text(model.error ?? "") }
     }
     private var recorderView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("把声音，留成文字。")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                    Text("中文与英文 · SenseVoice Small · 本机转录")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }.padding(.top, 12)
-                VStack(alignment: .leading, spacing: 14) {
-                    Label(model.modelReady ? "离线模型已就绪" : "录音不需要先下载模型", systemImage: model.modelReady ? "checkmark.shield.fill" : "arrow.down.circle.fill")
-                        .font(.headline).foregroundStyle(model.modelReady ? .green : .primary)
-                    Text(model.modelReady ? "关闭网络后也可以录音和转文字。" : "可以先录音保存；需要转文字时再下载约 239 MB 的模型。")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    if model.downloading {
-                        ProgressView(value: model.downloadProgress)
-                        Text("正在下载并校验… \(Int(model.downloadProgress * 100))%")
-                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                    } else if !model.modelReady {
-                        Button("下载 SenseVoice 模型") { model.downloadModel() }
-                            .buttonStyle(.borderedProminent).disabled(model.busy)
-                    }
-                }.padding(20).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
-                VStack(spacing: 18) {
-                    Image(systemName: model.isRecording ? "waveform" : "waveform.circle")
-                        .font(.system(size: 62)).foregroundStyle(.orange)
-                        .symbolEffect(.variableColor, isActive: model.isRecording)
-                    Text(model.isRecording ? timerText : "准备好，就开始说吧")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
-                    Text(model.isRecording ? "正在录音，点击停止后保存" : "先录音保存，需要时再转成文字。")
-                        .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button { model.isRecording ? model.stopRecording() : model.startRecording() } label: {
-                        Label(model.isRecording ? "停止并保存" : "开始录音", systemImage: model.isRecording ? "stop.fill" : "mic.fill")
-                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.downloading || model.transcribingID != nil || model.requestingPermission)
-                    if model.transcribingID != nil {
-                        ProgressView(value: model.transcriptionProgress)
-                        Text("正在本机识别，首次加载模型可能稍慢…").font(.caption).foregroundStyle(.secondary)
-                    }
-                }.frame(maxWidth: .infinity).padding(24)
-                    .background(Color.orange.opacity(0.07), in: RoundedRectangle(cornerRadius: 26))
-                if let notice = model.notice { Label(notice, systemImage: "info.circle").font(.subheadline).foregroundStyle(.secondary) }
-                if let latest = model.recordings.first {
-                    NavigationLink { RecordingDetail(id: latest.id) } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack { Text("最近一次录音").font(.headline); Spacer(); Image(systemName: "arrow.up.right") }
-                            Text(latest.text.isEmpty ? "录音已保存，点击查看。" : latest.text).font(.subheadline).lineLimit(4)
-                            Text(latest.title).font(.caption).foregroundStyle(.secondary)
-                        }.foregroundStyle(.primary).padding(20)
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22))
-                    }
-                }
-                Text("开始录音后可切换 App 或锁屏，返回后点击停止保存。来电等系统中断会停止录音。转录请在前台进行，后台录音效果待真机验证。")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }.padding(20)
-        }.navigationTitle("声笺").navigationBarTitleDisplayMode(.inline)
+        VStack(spacing: 28) {
+            Spacer()
+            if model.isRecording {
+                Text(timerText)
+                    .font(.system(size: 44, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+            }
+            Button { model.isRecording ? model.stopRecording() : model.startRecording() } label: {
+                Label(model.isRecording ? "停止并保存" : "开始录音", systemImage: model.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.title3.bold()).frame(maxWidth: .infinity).padding(.vertical, 20)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.downloading || model.transcribingID != nil || model.requestingPermission)
+            Spacer()
+        }.padding(32)
+            .navigationTitle("录音").navigationBarTitleDisplayMode(.inline)
     }
     private var timerText: String { String(format: "%02d:%02d", Int(model.elapsed) / 60, Int(model.elapsed) % 60) }
     private var libraryView: some View {
         List {
-            Section {
-                Picker("显示记录", selection: $transcriptsOnly) {
-                    Text("全部录音").tag(false)
-                    Text("转录稿").tag(true)
-                }.pickerStyle(.segmented).disabled(selecting)
-                Text("录音自动保存在本机，转录文字可单独删除。")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
             if visibleRecords.isEmpty {
-                ContentUnavailableView(transcriptsOnly ? "还没有转录稿" : "还没有录音", systemImage: transcriptsOnly ? "doc.text" : "waveform", description: Text(transcriptsOnly ? "选择一条已保存的录音进行转录，文字就会显示在这里。" : "录制第一段声音，音频与文字会保存在这里。"))
+                ContentUnavailableView("还没有录音", systemImage: "waveform", description: Text("录制的声音会保存在这里。"))
                     .listRowBackground(Color.clear)
             }
             ForEach(visibleRecords) { record in
@@ -118,11 +66,7 @@ struct ContentView: View {
                 } else {
                     NavigationLink(value: record.id) { recordRow(record) }
                          .swipeActions {
-                            if transcriptsOnly {
-                                Button("删除文字", role: .destructive) { deleteRecord = record }.disabled(model.busy)
-                            } else {
-                                Button("删除记录", role: .destructive) { deleteRecord = record }.disabled(model.busy)
-                            }
+                            Button("删除记录", role: .destructive) { deleteRecord = record }.disabled(model.busy)
                         }
                 }
             }
@@ -166,11 +110,9 @@ struct ContentView: View {
             }
         }
         .refreshable { model.reloadRecordings() }
-        .confirmationDialog(transcriptsOnly ? "删除这条转录文字？录音会保留。" : "删除录音和转录文字？", isPresented: Binding(get: { deleteRecord != nil }, set: { if !$0 { deleteRecord = nil } }), titleVisibility: .visible) {
-            Button(transcriptsOnly ? "删除文字，保留录音" : "删除整条记录", role: .destructive) {
-                if let record = deleteRecord {
-                    if transcriptsOnly { model.deleteTranscript(record.id) } else { model.delete(record) }
-                }
+        .confirmationDialog("删除录音和转录文字？", isPresented: Binding(get: { deleteRecord != nil }, set: { if !$0 { deleteRecord = nil } }), titleVisibility: .visible) {
+            Button("删除整条记录", role: .destructive) {
+                if let record = deleteRecord { model.delete(record) }
                 deleteRecord = nil
             }
             Button("取消", role: .cancel) { deleteRecord = nil }
@@ -178,7 +120,7 @@ struct ContentView: View {
         .sheet(item: $exportSelection) { selection in TextExportView(records: selection.records) }
     }
     private var visibleRecords: [Recording] {
-        transcriptsOnly ? Array(RecordingTextExport.exportable(model.recordings).reversed()) : model.recordings
+        model.recordings
     }
     private func recordRow(_ record: Recording) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -236,15 +178,20 @@ struct RecordingDetail: View {
                         }.disabled(record.text.isEmpty || model.busy)
                         if !record.text.isEmpty {
                             Button { exportSelection = ExportSelection(records: [record]) } label: {
-                                Label("导出文字到文件 / 云盘", systemImage: "folder")
+                                Label("导出文字", systemImage: "folder")
                             }.buttonStyle(.borderedProminent).disabled(model.busy)
-                            ShareLink(item: record.text) { Label("分享文字", systemImage: "square.and.arrow.up") }
                             Button("删除转录文字", role: .destructive) { deletingText = true }
                                 .disabled(model.busy)
                         }
                         if !model.modelReady {
-                            Text("录音已保存。请先在录音页下载离线模型，再回来转录。")
-                                .font(.footnote).foregroundStyle(.secondary)
+                            if model.downloading {
+                                ProgressView(value: model.downloadProgress)
+                                Text("正在下载离线模型… \(Int(model.downloadProgress * 100))%")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            } else {
+                                Button("下载离线模型（239 MB）") { model.downloadModel() }
+                                    .buttonStyle(.bordered).disabled(model.busy)
+                            }
                         }
                         Button(record.processingDuration == nil ? "转录这段录音" : "重新转录（覆盖当前文字）") { model.transcribeRecording(id) }
                             .buttonStyle(.bordered).disabled(model.busy || !model.modelReady)
@@ -254,7 +201,7 @@ struct RecordingDetail: View {
                         Text(record.filename).textSelection(.enabled)
                     }.font(.caption).foregroundStyle(.secondary)
                     Button("删除这条录音及文字", role: .destructive) { deletingRecord = true }.disabled(model.busy)
-                    Text("音频保存在本机。导出仅包含 Markdown 文字；已导出的副本可在「文件与云盘」中管理。")
+                    Text("音频保存在本机。导出仅包含 Markdown 文字；已导出的副本可在系统「文件」App 中管理。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }.padding(20)
             }
